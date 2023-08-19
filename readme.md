@@ -22,7 +22,11 @@ https://marabos.nl/atomics/foreword.html
 
 ## Interesting repos:
 
+From command line Rust:
 https://github.com/kyclark/command-line-rust
+
+From Atomics and locks:
+https://github.com/m-ou-se/rust-atomics-and-locks/tree/main/src
 
 ## Tooling (mostly VSCode) comments and links:
 
