@@ -6,12 +6,17 @@ use std::{
     time::Duration,
 };
 
+use web_server::ThreadPool;
+
+//https://doc.rust-lang.org/stable/book/ch20-03-graceful-shutdown-and-cleanup.html
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:8080").unwrap();
-
+    let pool = ThreadPool::new(4);
     for stream in listener.incoming() {
         let stream = stream.unwrap();
-        handle_connection_refactored(stream);
+        pool.execute(|| {
+            handle_connection_refactored(stream);
+        });
     }
 }
 

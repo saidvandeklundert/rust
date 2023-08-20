@@ -10,6 +10,17 @@ docker run --name='rust_container' --hostname='rust_container' -di rust:latest
 docker exec -it rust_container bash
 ```
 
+## Building and executing code:
+
+```
+cargo run
+
+# compile packages without the final step of code generation:
+cargo check 
+
+
+cargo doc --open
+```
 
 ## Useful links:
 https://doc.rust-lang.org/stable/book/
