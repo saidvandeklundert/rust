@@ -20,6 +20,9 @@ cargo check
 
 
 cargo doc --open
+
+# with an env var:
+RUST_LOG=info cargo run
 ```
 
 ## Useful links:
@@ -30,6 +33,14 @@ https://rust-unofficial.github.io/too-many-lists/
 https://doc.rust-lang.org/stable/rust-by-example/
 https://doc.rust-lang.org/nightly/nomicon/
 https://marabos.nl/atomics/foreword.html
+
+build an interpreter in Rust, inspired by Nystrom (not finished yet):
+https://rust-hosted-langs.github.io/book/
+
+
+https://adventofcode.com/2015
+https://adventofcode.com/2015/day/1
+
 
 ## Interesting repos:
 
