@@ -8,7 +8,7 @@ use std::path::Path;
 
 pub fn debug() {
     info!("In the debug, running lib!");
-    let config = open_config_file("config_3.txt");
+    let config = open_config_file("config_1.txt");
     debug!("lexing the following:\n{config}");
     let config_length = config.clone().into_bytes().len();
     let mut lexer = Lexer::new(config.clone());
@@ -227,22 +227,23 @@ impl ConfigWriter {
 
                     self.stack_pointer = self.stack_pointer - 1;
 
-                    debug!(
-                        "before pop: {joined} {} {} ",
-                        self.cur_line.len(),
-                        self.stack_pointer
-                    );
+                    //debug!(
+                    //    "before pop: {joined} {} {} ",
+                    //    self.cur_line.len(),
+                    //    self.stack_pointer
+                    //);
 
-                    while self.cur_line.len() <= self.stack_pointer {
-                        self.cur_line.pop();
-                        debug!(
-                            "while pop cur_line len:{} pointer {}",
-                            self.cur_line.len(),
-                            self.stack_pointer
-                        );
-                    }
-                    let joined = self.cur_line.join(" ");
-                    debug!("after pop: {joined}");
+                    //while self.cur_line.len() <= self.stack_pointer {
+                    //    self.cur_line.pop();
+                    //    debug!(
+                    //        "while pop cur_line len:{} pointer {}",
+                    //        self.cur_line.len(),
+                    //        self.stack_pointer
+                    //    );
+                    //}
+                    //let joined = self.cur_line.join(" ");
+                    //debug!("after pop: {joined}");
+                    self.shrink_line_to_stack_pointer()
                 }
                 Token::Identifier(string) => {
                     let mut statement = string;
@@ -261,7 +262,7 @@ impl ConfigWriter {
             }
             self.read_token();
         }
-        return self.output.join("\n") + "\n";
+        return self.output.join("\n");
     }
 
     // prepare the string so that it is formatted as a configuration statement.
@@ -271,7 +272,7 @@ impl ConfigWriter {
         let joined = self.cur_line.join(" ");
         let mut result_addition =
             "set ".to_string() + &joined + &" ".to_string() + &addition_statement;
-        info!("result_addition {result_addition}");
+        info!("{result_addition}");
         return result_addition;
     }
 
@@ -298,7 +299,7 @@ impl ConfigWriter {
 mod test {
 
     use super::ConfigWriter;
-    use super::{Lexer, Token};
+    use super::{open_config_file, Lexer, Token};
     #[test]
     fn instantiate_lexer() {
         let input = String::from("{ example }");
@@ -350,11 +351,26 @@ mod test {
 set system services ftp
 set system services ssh
 set system services telnet
-set system services netconf ssh
-",
+set system services netconf ssh",
         );
         let mut config_writer = ConfigWriter::new(input.clone());
         let result = config_writer.write_configs();
         assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn config_convert() {
+        let files = vec!["config_1", "config_3"];
+        for filename in files {
+            let filename_text = filename.clone().to_owned() + ".txt";
+            let file_name_set = filename.clone().to_owned() + "_set.txt";
+            let config = open_config_file(&filename_text);
+
+            let expected = open_config_file(&file_name_set);
+
+            let mut config_writer = ConfigWriter::new(config.clone());
+            let result = config_writer.write_configs();
+            assert_eq!(result, expected);
+        }
     }
 }
