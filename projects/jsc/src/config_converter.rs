@@ -247,13 +247,7 @@ impl ConfigWriter {
                 Token::Identifier(string) => {
                     let mut statement = string;
                     if statement.ends_with(';') {
-                        let mut addition_statement = statement.clone();
-                        addition_statement.pop();
-                        let joined = self.cur_line.join(" ");
-                        let mut result_addition =
-                            "set ".to_string() + &joined + &" ".to_string() + &addition_statement;
-
-                        info!("result_addition {result_addition}");
+                        let result_addition = self.create_addition_statement(statement.clone());
                         self.output.push(String::from(result_addition));
                         self.shrink_line_to_stack_pointer()
                     } else {
@@ -268,6 +262,17 @@ impl ConfigWriter {
             self.read_token();
         }
         return self.output.join("\n") + "\n";
+    }
+
+    // prepare the string so that it is formatted as a configuration statement.
+    fn create_addition_statement(&mut self, statement: String) -> String {
+        let mut addition_statement = statement.clone();
+        addition_statement.pop();
+        let joined = self.cur_line.join(" ");
+        let mut result_addition =
+            "set ".to_string() + &joined + &" ".to_string() + &addition_statement;
+        info!("result_addition {result_addition}");
+        return result_addition;
     }
 
     // shrink the config line that is to be written to the size of the
