@@ -9,7 +9,7 @@ use std::path::Path;
 
 pub fn debug() {
     info!("In the debug, running lib!");
-    let file_name = "config_4";
+    let file_name = "config_1";
     let config_file = file_name.clone().to_owned() + ".txt";
     let expected_file = file_name.clone().to_owned() + "_set.txt";
     let config = open_config_file(&config_file);
@@ -22,6 +22,7 @@ pub fn debug() {
         "Should be:\n
 {expected}"
     );
+    assert_eq!(config_writer_result, expected);
 }
 
 // Open a configuration file and return the content as a String:
@@ -54,6 +55,8 @@ enum Token {
     Semicolon,
     Unkown(String),
     Start,
+    LeftBracket,
+    RightBracket,
 }
 
 impl Display for Token {
@@ -66,6 +69,8 @@ impl Display for Token {
             Token::RightSquirly => write!(f, "RightSquirly"),
             Token::Semicolon => write!(f, "SemiColon"),
             Token::Start => write!(f, "Start"),
+            Token::LeftBracket => write!(f, "LeftBracket"),
+            Token::RightBracket => write!(f, "RightBracket"),
         };
     }
 }
@@ -114,7 +119,9 @@ impl Lexer {
             '{' => Token::LeftSquirly,
             '}' => Token::RightSquirly,
             ';' => Token::Semicolon,
-            'a'..='z' | 'A'..='Z' | '"' | '-' | '0'..='9' | '^' => {
+            '[' => Token::LeftBracket,
+            ']' => Token::RightBracket,
+            'a'..='z' | 'A'..='Z' | '"' | '-' | '0'..='9' | '^' | '<' | '*' | '>' => {
                 let statement = self.read_identifier();
                 match statement.as_str() {
                     "placeholder" => Token::Identifier(String::from("placeholder")),
@@ -196,7 +203,7 @@ impl ConfigWriter {
         let mut stanza_stack: Vec<String> = Vec::new();
         let mut stanza_pointer: usize = 0;
         let mut config_line_stack: Vec<String> = Vec::new();
-
+        let mut inside_bracket_array: bool = false;
         while self.token != Token::Eof {
             debug!("write_configs: {} {}", self.read_position, self.token);
             match &self.token {
@@ -205,6 +212,15 @@ impl ConfigWriter {
                     stanza_pointer += 1;
                     stanza_stack_record.push(stanza_stack.clone());
                     stanza_stack.clear();
+                    config_line_stack.clear();
+                }
+                Token::LeftBracket => {
+                    info!("LeftBracket");
+                    inside_bracket_array = true;
+                }
+                Token::RightBracket => {
+                    info!("RightBracket");
+                    inside_bracket_array = false;
                     config_line_stack.clear();
                 }
                 Token::RightSquirly => {
@@ -224,6 +240,13 @@ impl ConfigWriter {
                         self.output.push(addition);
                         config_line_stack.clear();
                         stanza_stack.clear();
+                    } else if inside_bracket_array {
+                        // bracket array statements are build in this condition
+                        // the config_line_stack is reset when the right bracket is encountered
+                        config_line_stack.push(statement.clone().to_owned());
+                        let addition = build_string(&stanza_stack_record, &config_line_stack);
+                        self.output.push(addition);
+                        config_line_stack.pop();
                     } else {
                         info!("non terminating statement {statement}");
                         stanza_stack.push(statement.clone().to_owned());
@@ -254,18 +277,20 @@ impl ConfigWriter {
     }
 }
 
+// Take the stanza_stack_record and the config_line_stack to produce a syntactically valid Juniper
+// set configuration command.
 fn build_string(stanza_stack_record: &Vec<Vec<String>>, config_line_stack: &Vec<String>) -> String {
     let mut new_string = String::from("set");
 
     for vec in stanza_stack_record {
         for string in vec {
             new_string.push_str(" ");
-            new_string.push_str(&string.to_string().to_owned());
+            new_string.push_str(&string.to_string());
         }
     }
     for string in config_line_stack {
         new_string.push_str(" ");
-        new_string.push_str(&string.to_string().to_owned());
+        new_string.push_str(&string.to_string());
     }
 
     if new_string.ends_with(";") {
@@ -279,12 +304,32 @@ fn build_string(stanza_stack_record: &Vec<Vec<String>>, config_line_stack: &Vec<
 mod test {
 
     use super::ConfigWriter;
-    use super::{open_config_file, Lexer, Token};
+    use super::{build_string, open_config_file, Lexer, Token};
+
+    #[test]
+    fn test_build_string() {
+        let input = String::from("{ example }");
+        let stanza_stack_record = vec![
+            vec![String::from("groups")],
+            vec![String::from("BLOCK-V6")],
+            vec![String::from("vlans")],
+            vec![String::from("<*>")],
+            vec![String::from("forwarding-options")],
+            vec![String::from("filter")],
+        ];
+        let config_line_stack = vec![String::from("input"), String::from("BLOCK-IPv6;")];
+        let result = build_string(&stanza_stack_record, &config_line_stack);
+        let expected = String::from(
+            "set groups BLOCK-V6 vlans <*> forwarding-options filter input BLOCK-IPv6",
+        );
+        assert_eq!(result, expected);
+    }
     #[test]
     fn instantiate_lexer() {
         let input = String::from("{ example }");
         let _ = Lexer::new(input);
     }
+
     #[test]
     fn basic_identifiers_test() {
         let input = String::from("{ as-path test another-statement-123 } } }");
@@ -365,7 +410,17 @@ set policy-options policy-statement directs term Lo0 then accept",
 
     #[test]
     fn config_convert_files() {
-        let files = vec!["config_1", "config_3", "config_4", "config_5", "config_6"];
+        let files = vec![
+            "config_1",
+            "config_2",
+            "config_3",
+            "config_4",
+            "config_5",
+            "config_6",
+            "config_7",
+            "config_10",
+            "config_11",
+        ];
         for filename in files {
             let filename_text = filename.clone().to_owned() + ".txt";
             let file_name_set = filename.clone().to_owned() + "_set.txt";
