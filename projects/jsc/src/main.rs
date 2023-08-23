@@ -4,6 +4,4 @@ fn main() {
     println!("Hello, world!");
     env_logger::init();
     config_converter::debug();
-
-    info!("Hello world!");
 }

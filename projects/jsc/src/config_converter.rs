@@ -1,4 +1,5 @@
 // RUST_LOG=info cargo run
+// RUST_LOG=debug cargo run
 // cargo test
 use log::{debug, info, warn};
 use std::fmt::Display;
@@ -8,31 +9,17 @@ use std::path::Path;
 
 pub fn debug() {
     info!("In the debug, running lib!");
-    let config = open_config_file("config_1.txt");
-    debug!("lexing the following:\n{config}");
-    let config_length = config.clone().into_bytes().len();
-    let mut lexer = Lexer::new(config.clone());
-    // while loop for now:
-    let mut n = 1;
-
-    let mut token = lexer.next_token();
-    debug!("{token}");
-    while token != Token::Eof {
-        n = n + 1;
-        token = lexer.next_token();
-        debug!("{token}");
-    }
+    let config = open_config_file("config_6.txt");
 
     let mut config_writer = ConfigWriter::new(config.clone());
-    config_writer.write_configs();
+    let config_writer_result = config_writer.write_configs();
+    println!("{config_writer_result}");
 
-    info!("finished the debug function");
-
-    //let stupid_token = Token::Identifier("as-path".to_string());
-    //match stupid_token {
-    //    Token::Identifier(s) => println!("identifier \"{}\".", s),
-    //    _ => println!("FK"),
-    //};
+    println!(
+        "Should be:\n
+set system host-name myrouter
+set system services ftp"
+    );
 }
 
 // Open a configuration file and return the content as a String:
@@ -163,6 +150,12 @@ impl Lexer {
     }
 }
 
+// Everytime the Juniper configuration opens a stanza, the size
+// value indicates by how much the stanza lines should grow or shrink.
+struct StanzaStack {
+    size: usize,
+}
+
 struct ConfigWriter {
     tokens: Vec<Token>,
     token: Token,
@@ -170,7 +163,9 @@ struct ConfigWriter {
     read_position: usize,
     end: usize,
     stack: Vec<Token>,
+    stanza_stack: Vec<StanzaStack>,
     stack_pointer: usize,
+    squirly_stack_pointer: usize,
     cur_line: Vec<String>,
     output: Vec<String>,
 }
@@ -198,6 +193,7 @@ impl ConfigWriter {
         let mut stack: Vec<Token> = Vec::new();
         let mut cur_line: Vec<String> = Vec::new();
         let mut output: Vec<String> = Vec::new();
+        let mut stanza_stack: Vec<StanzaStack> = Vec::new();
         return ConfigWriter {
             tokens: tokens,
             token: Token::Start,
@@ -206,6 +202,8 @@ impl ConfigWriter {
             end: end,
             stack: stack,
             stack_pointer: 0,
+            squirly_stack_pointer: 0,
+            stanza_stack: stanza_stack,
             cur_line: cur_line,
             output: output,
         };
@@ -213,54 +211,52 @@ impl ConfigWriter {
 
     fn write_configs(&mut self) -> String {
         self.read_token();
+        let mut stanza_stack_record: Vec<Vec<String>> = Vec::new();
+        let mut stanza_stack: Vec<String> = Vec::new();
+        let mut stanza_pointer: usize = 0;
+        let mut config_line_stack: Vec<String> = Vec::new();
+
         while self.token != Token::Eof {
-            debug!("{} {}", self.read_position, self.token);
+            debug!("write_configs: {} {}", self.read_position, self.token);
             match &self.token {
                 Token::LeftSquirly => {
-                    self.stack_pointer = self.cur_line.len();
-                    debug!("LeftSquirly self.cur_line.len() {}", self.cur_line.len(),);
-                    let joined = self.cur_line.join(" ");
-                    debug!("LeftSquirly joined:{joined}");
+                    info!("LeftSquirly stack size increase ");
+                    stanza_pointer += 1;
+                    stanza_stack_record.push(stanza_stack.clone());
+                    stanza_stack.clear();
+                    config_line_stack.clear();
                 }
                 Token::RightSquirly => {
-                    let joined = self.cur_line.join(" ");
-
-                    self.stack_pointer = self.stack_pointer - 1;
-
-                    //debug!(
-                    //    "before pop: {joined} {} {} ",
-                    //    self.cur_line.len(),
-                    //    self.stack_pointer
-                    //);
-
-                    //while self.cur_line.len() <= self.stack_pointer {
-                    //    self.cur_line.pop();
-                    //    debug!(
-                    //        "while pop cur_line len:{} pointer {}",
-                    //        self.cur_line.len(),
-                    //        self.stack_pointer
-                    //    );
-                    //}
-                    //let joined = self.cur_line.join(" ");
-                    //debug!("after pop: {joined}");
-                    self.shrink_line_to_stack_pointer()
+                    info!("RightSquirly");
+                    stanza_pointer -= 1;
+                    stanza_stack.clear();
+                    stanza_stack_record.pop();
                 }
                 Token::Identifier(string) => {
                     let mut statement = string;
                     if statement.ends_with(';') {
-                        let result_addition = self.create_addition_statement(statement.clone());
-                        self.output.push(String::from(result_addition));
-                        self.shrink_line_to_stack_pointer()
+                        info!("stanza_stack_record {:#?}", stanza_stack_record);
+                        info!("terminating statement {statement}");
+                        config_line_stack.push(statement.clone().to_owned());
+                        info!("config_line_stack {:#?}", config_line_stack);
+                        let addition = build_string(&stanza_stack_record, &config_line_stack);
+                        self.output.push(addition);
+                        config_line_stack.clear();
+                        stanza_stack.clear();
                     } else {
-                        &self.cur_line.push(statement.to_owned());
-
-                        let joined = self.cur_line.join(" ");
-                        debug!("cur_line {joined}");
+                        info!("non terminating statement {statement}");
+                        stanza_stack.push(statement.clone().to_owned());
+                        config_line_stack.push(statement.clone().to_owned());
                     }
                 }
                 _ => debug!("hit default case for {}", self.token),
             }
+
             self.read_token();
+            debug!("stanza_stack {:#?}", stanza_stack);
+            debug!("stanza_pointer {stanza_pointer}");
+            debug!("stanza_stack_record {:#?}", stanza_stack_record);
+            info!("config_line_stack {:#?}", config_line_stack);
         }
         return self.output.join("\n");
     }
@@ -283,6 +279,19 @@ impl ConfigWriter {
             self.cur_line.pop();
         }
     }
+
+    fn shrink_line_to_squirly_stack_pointer(&mut self) {
+        let mut joined = self.cur_line.join(" ");
+        info!("before shrink to curly {joined}");
+        info!("self.squirly_stack_pointer {}", self.squirly_stack_pointer);
+        while self.cur_line.len() != self.squirly_stack_pointer {
+            self.cur_line.pop();
+        }
+        self.stack_pointer = self.squirly_stack_pointer;
+        joined = self.cur_line.join(" ");
+        info!("after shrink to curly  {joined}");
+    }
+
     fn read_token(&mut self) {
         if self.read_position >= self.tokens.len() {
             self.token = Token::Eof;
@@ -295,6 +304,27 @@ impl ConfigWriter {
     }
 }
 
+fn build_string(stanza_stack_record: &Vec<Vec<String>>, config_line_stack: &Vec<String>) -> String {
+    let mut new_string = String::from("set");
+
+    for vec in stanza_stack_record {
+        for string in vec {
+            new_string.push_str(" ");
+            new_string.push_str(&string.to_string().to_owned());
+        }
+    }
+    for string in config_line_stack {
+        new_string.push_str(" ");
+        new_string.push_str(&string.to_string().to_owned());
+    }
+
+    if new_string.ends_with(";") {
+        new_string.pop();
+    }
+    info!("config_line:\n{new_string}");
+    new_string
+}
+
 #[cfg(test)]
 mod test {
 
@@ -305,7 +335,6 @@ mod test {
         let input = String::from("{ example }");
         let mut lexer = Lexer::new(input);
     }
-
     #[test]
     fn basic_identifiers_test() {
         let input = String::from("{ as-path test another-statement-123 } } }");
@@ -331,7 +360,7 @@ mod test {
     }
 
     #[test]
-    fn basic_config_convert() {
+    fn basic_config_convert_1() {
         let input = String::from(
             "system {
             host-name myrouter;
@@ -359,6 +388,31 @@ set system services netconf ssh",
     }
 
     #[test]
+    fn basic_config_convert_2() {
+        let input = String::from(
+            "policy-options {
+                policy-statement directs {
+                    term Lo0 {
+                        from {
+                            protocol direct;
+                            route-filter 192.168.100.0/24 orlonger;
+                        }
+                        then accept;
+                    }
+                }   
+            }",
+        );
+
+        let expected = String::from(
+            "set policy-options policy-statement directs term Lo0 from protocol direct
+set policy-options policy-statement directs term Lo0 from route-filter 192.168.100.0/24 orlonger
+set policy-options policy-statement directs term Lo0 then accept",
+        );
+        let mut config_writer = ConfigWriter::new(input.clone());
+        let result = config_writer.write_configs();
+        assert_eq!(result, expected);
+    }
+
     fn config_convert() {
         let files = vec!["config_1", "config_3"];
         for filename in files {
