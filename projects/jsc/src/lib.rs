@@ -9,7 +9,7 @@ use std::path::Path;
 
 pub fn debug() {
     info!("In the debug, running lib!");
-    let file_name = "config_14";
+    let file_name = "config_16";
     let config_file = file_name.clone().to_owned() + ".txt";
     let expected_file = file_name.clone().to_owned() + "_set.txt";
     let config = open_config_file(&config_file);
@@ -58,6 +58,8 @@ enum Token {
     Start,
     LeftBracket,
     RightBracket,
+    Pound,
+    NewLine,
 }
 
 impl Display for Token {
@@ -72,6 +74,8 @@ impl Display for Token {
             Token::Start => write!(f, "Start"),
             Token::LeftBracket => write!(f, "LeftBracket"),
             Token::RightBracket => write!(f, "RightBracket"),
+            Token::Pound => write!(f, "Pound"),
+            Token::NewLine => write!(f, "NewLine"),
         };
     }
 }
@@ -110,6 +114,10 @@ impl Lexer {
         self.read_position += 1;
     }
 
+    fn peek(&mut self) -> char {
+        return self.source[self.read_position];
+    }
+
     fn next_token(&mut self) -> Token {
         self.skip_whitespace();
 
@@ -122,6 +130,8 @@ impl Lexer {
             ';' => Token::Semicolon,
             '[' => Token::LeftBracket,
             ']' => Token::RightBracket,
+            '#' => Token::Pound,
+            '\n' => Token::NewLine,
             'a'..='z' | 'A'..='Z' | '"' | '-' | '0'..='9' | '^' | '<' | '*' | '>' => {
                 let statement = self.read_identifier();
                 match statement.as_str() {
@@ -206,6 +216,9 @@ impl ConfigWriter {
         let mut config_line_stack: Vec<String> = Vec::new();
         let mut inside_bracket_array: bool = false;
         let mut next_inactive: bool = false;
+        let mut next_protect: bool = false;
+        let mut ignore_pound_comment: bool = false;
+
         while self.token != Token::Eof {
             debug!("write_configs: {} {}", self.read_position, self.token);
             match &self.token {
@@ -216,6 +229,11 @@ impl ConfigWriter {
                             .replace("set", "deactivate");
                         self.output.push(addition);
                         next_inactive = false;
+                    } else if next_protect {
+                        let addition = build_string(&stanza_stack_record, &config_line_stack)
+                            .replace("set", "protect");
+                        self.output.push(addition);
+                        next_protect = false;
                     }
                     stanza_pointer += 1;
                     stanza_stack_record.push(stanza_stack.clone());
@@ -246,9 +264,19 @@ impl ConfigWriter {
                     stanza_stack.clear();
                     stanza_stack_record.pop();
                 }
+                Token::Pound => {
+                    info!("Pound ignore_pound_comment > true");
+                    ignore_pound_comment = true;
+                }
+                Token::NewLine => {
+                    info!("NewLine ignore_pound_comment > false");
+                    ignore_pound_comment = false;
+                }
                 Token::Identifier(string) => {
                     let statement = string;
-                    if statement.ends_with(';') {
+                    if ignore_pound_comment == true {
+                        ()
+                    } else if statement.ends_with(';') {
                         info!("stanza_stack_record {:#?}", stanza_stack_record);
                         info!("terminating statement {statement}");
                         config_line_stack.push(statement.clone().to_owned());
@@ -262,6 +290,13 @@ impl ConfigWriter {
                             next_inactive = false;
                             self.output.push(addition);
                             self.output.push(deactivate);
+                        } else if next_protect {
+                            info!("\n\n\n\n next_inactive protect!!");
+
+                            let protect = addition.clone().replace("set", "protect");
+                            next_protect = false;
+                            self.output.push(addition);
+                            self.output.push(protect);
                         } else {
                             self.output.push(addition);
                         }
@@ -280,6 +315,12 @@ impl ConfigWriter {
                         info!("stanza_pointer {stanza_pointer}");
                         info!("stanza_stack_record {:#?}", stanza_stack_record);
                         next_inactive = true;
+                    } else if statement == "protect:" {
+                        info!("\n\n\nPROTECT!!");
+                        info!("stanza_stack {:#?}", stanza_stack);
+                        info!("stanza_pointer {stanza_pointer}");
+                        info!("stanza_stack_record {:#?}", stanza_stack_record);
+                        next_protect = true;
                     } else {
                         info!("non terminating statement {statement}");
 
@@ -459,6 +500,8 @@ set policy-options policy-statement directs term Lo0 then accept",
             "config_12",
             "config_13",
             "config_14",
+            "config_15",
+            "config_16",
         ];
         for filename in files {
             let filename_text = filename.clone().to_owned() + ".txt";
