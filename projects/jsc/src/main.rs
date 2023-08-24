@@ -1,7 +1,6 @@
-mod config_converter;
-
+use jsc::debug;
 fn main() {
     println!("Hello, world!");
     env_logger::init();
-    config_converter::debug();
+    debug();
 }

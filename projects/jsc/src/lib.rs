@@ -9,19 +9,20 @@ use std::path::Path;
 
 pub fn debug() {
     info!("In the debug, running lib!");
-    let file_name = "config_1";
+    let file_name = "config_14";
     let config_file = file_name.clone().to_owned() + ".txt";
     let expected_file = file_name.clone().to_owned() + "_set.txt";
     let config = open_config_file(&config_file);
 
     let mut config_writer = ConfigWriter::new(config.clone());
     let config_writer_result = config_writer.write_configs();
-    println!("{config_writer_result}");
+    println!("Output:\n\n{config_writer_result}");
     let expected = open_config_file(&expected_file);
     println!(
-        "Should be:\n
-{expected}"
+        "\nShould be:\n
+{expected}\n\n"
     );
+
     assert_eq!(config_writer_result, expected);
 }
 
@@ -186,7 +187,7 @@ impl ConfigWriter {
             }
         }
         debug!("Tokenization done!!\n\n\n");
-
+        info!("{:#?}", tokens);
         let output: Vec<String> = Vec::new();
         return ConfigWriter {
             tokens: tokens,
@@ -204,11 +205,18 @@ impl ConfigWriter {
         let mut stanza_pointer: usize = 0;
         let mut config_line_stack: Vec<String> = Vec::new();
         let mut inside_bracket_array: bool = false;
+        let mut next_inactive: bool = false;
         while self.token != Token::Eof {
             debug!("write_configs: {} {}", self.read_position, self.token);
             match &self.token {
                 Token::LeftSquirly => {
                     info!("LeftSquirly stack size increase ");
+                    if next_inactive {
+                        let addition = build_string(&stanza_stack_record, &config_line_stack)
+                            .replace("set", "deactivate");
+                        self.output.push(addition);
+                        next_inactive = false;
+                    }
                     stanza_pointer += 1;
                     stanza_stack_record.push(stanza_stack.clone());
                     stanza_stack.clear();
@@ -221,6 +229,15 @@ impl ConfigWriter {
                 Token::RightBracket => {
                     info!("RightBracket");
                     inside_bracket_array = false;
+                    config_line_stack.clear();
+                }
+                Token::Semicolon => {
+                    info!("Semicolon");
+                    if self.tokens[self.read_position - 2] == Token::RightBracket {
+                        // this means we have a lost ';' after iterating the values
+                        // in brackets and we need to wipe the stanza_stack
+                        stanza_stack.clear();
+                    }
                     config_line_stack.clear();
                 }
                 Token::RightSquirly => {
@@ -237,7 +254,17 @@ impl ConfigWriter {
                         config_line_stack.push(statement.clone().to_owned());
                         info!("config_line_stack {:#?}", config_line_stack);
                         let addition = build_string(&stanza_stack_record, &config_line_stack);
-                        self.output.push(addition);
+
+                        if next_inactive {
+                            info!("\n\n\n\n next_inactive INACTIVE!!");
+
+                            let deactivate = addition.clone().replace("set", "deactivate");
+                            next_inactive = false;
+                            self.output.push(addition);
+                            self.output.push(deactivate);
+                        } else {
+                            self.output.push(addition);
+                        }
                         config_line_stack.clear();
                         stanza_stack.clear();
                     } else if inside_bracket_array {
@@ -247,8 +274,15 @@ impl ConfigWriter {
                         let addition = build_string(&stanza_stack_record, &config_line_stack);
                         self.output.push(addition);
                         config_line_stack.pop();
+                    } else if statement == "inactive:" {
+                        info!("\n\n\n\nINACTIVE!!");
+                        info!("stanza_stack {:#?}", stanza_stack);
+                        info!("stanza_pointer {stanza_pointer}");
+                        info!("stanza_stack_record {:#?}", stanza_stack_record);
+                        next_inactive = true;
                     } else {
                         info!("non terminating statement {statement}");
+
                         stanza_stack.push(statement.clone().to_owned());
                         config_line_stack.push(statement.clone().to_owned());
                     }
@@ -418,8 +452,13 @@ set policy-options policy-statement directs term Lo0 then accept",
             "config_5",
             "config_6",
             "config_7",
+            "config_8",
+            "config_9",
             "config_10",
             "config_11",
+            "config_12",
+            "config_13",
+            "config_14",
         ];
         for filename in files {
             let filename_text = filename.clone().to_owned() + ".txt";
