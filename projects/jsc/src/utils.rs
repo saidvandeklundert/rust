@@ -1,5 +1,4 @@
-use log::{debug, info, warn};
-use std::fmt::Display;
+use log::info;
 use std::fs;
 use std::io::prelude::*;
 use std::path::Path;
@@ -54,7 +53,6 @@ mod test {
 
     #[test]
     fn test_build_string() {
-        let input = String::from("{ example }");
         let stanza_stack_record = vec![
             vec![String::from("groups")],
             vec![String::from("BLOCK-V6")],

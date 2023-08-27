@@ -1,10 +1,6 @@
 use crate::lexer::{Lexer, Token};
-use crate::utils::{build_string, open_config_file};
-use log::{debug, info, warn};
-use std::fmt::Display;
-use std::fs;
-use std::io::prelude::*;
-use std::path::Path;
+use crate::utils::build_string;
+use log::{debug, info};
 
 pub struct ConfigWriter {
     tokens: Vec<Token>,
@@ -53,7 +49,6 @@ impl ConfigWriter {
         let mut inside_bracket_array: bool = false;
         let mut next_inactive: bool = false;
         let mut next_protect: bool = false;
-        let mut ignore_pound_comment: bool = false;
 
         while self.token != Token::Eof {
             debug!("write_configs: {} {}", self.read_position, self.token);
@@ -175,7 +170,7 @@ impl ConfigWriter {
     // - an identifier that can be interpreted as a terminating statment
     fn move_past_comment(&mut self) {
         info!("move_past_comment");
-        while true {
+        loop {
             let next_token = self.tokens[self.read_position].clone();
             if next_token == Token::NewLine || next_token == Token::RightSquirly {
                 break;

@@ -5,7 +5,7 @@ system {
     }
     protect: services {
         ftp;
-        ssh;
+        ssh; ## some random comment somone put in a Jinja template.
         telnet;
         netconf {
             ssh;

@@ -23,6 +23,19 @@ cargo doc --open
 
 # with an env var:
 RUST_LOG=info cargo run
+
+cargo run -- --other --args
+```
+
+```
+cargo build --release
+
+```
+
+
+Add package using cargo:
+```
+cargo add clap --features derive
 ```
 
 ## Useful links:
